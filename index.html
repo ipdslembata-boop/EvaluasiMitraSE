@@ -1,0 +1,130 @@
+<script>
+        const APPS_SCRIPT_URL = "PASTE_URL_WEB_APP_ANDA_DISINI";
+
+        let databaseMaster = [];
+
+        window.onload = async function() {
+            try {
+                const response = await fetch(APPS_SCRIPT_URL);
+                databaseMaster = await response.json();
+                
+                const korwilSet = [...new Set(databaseMaster.map(item => item.korwil))].filter(Boolean);
+                const korwilSelect = document.getElementById('korwilSelect');
+                
+                korwilSelect.innerHTML = '<option value="">-- Pilih Korwil --</option>';
+                korwilSet.forEach(k => {
+                    let opt = document.createElement('option');
+                    opt.value = k;
+                    opt.textContent = k;
+                    korwilSelect.appendChild(opt);
+                });
+            } catch (error) {
+                console.error("Gagal memuat database:", error);
+                document.getElementById('korwilSelect').innerHTML = '<option value="">Gagal memuat data dari Spreadsheet</option>';
+            }
+        };
+
+        function updateWilayahOptions() {
+            const selectedKorwil = document.getElementById('korwilSelect').value;
+            const wilayahSelect = document.getElementById('wilayahSelect');
+            wilayahSelect.innerHTML = '<option value="">-- Pilih Wilayah (Kecamatan - Desa) --</option>';
+            document.getElementById('namaMitra').innerHTML = '<option value="">-- Pilih Mitra Terlebih Dahulu --</option>';
+
+            // Gabung Kecamatan - Desa yang unik untuk korwil tersebut
+            const filteredRows = databaseMaster.filter(item => item.korwil === selectedKorwil);
+            const wilayahSet = [];
+            filteredRows.forEach(item => {
+                const kombinasi = `${item.kecamatan} - ${item.desa}`;
+                if (!wilayahSet.includes(kombinasi)) {
+                    wilayahSet.push(kombinasi);
+                }
+            });
+
+            wilayahSet.forEach(w => {
+                let opt = document.createElement('option');
+                opt.value = w;
+                opt.textContent = w;
+                wilayahSelect.appendChild(opt);
+            });
+        }
+
+        function updateMitraOptions() {
+            const selectedKorwil = document.getElementById('korwilSelect').value;
+            const selectedWilayah = document.getElementById('wilayahSelect').value;
+            const peran = document.getElementById('peranMitra').value;
+            const mitraSelect = document.getElementById('namaMitra');
+            
+            mitraSelect.innerHTML = '<option value="">-- Pilih Nama Mitra --</option>';
+            if (!peran || !selectedWilayah) return;
+
+            const [kecTarget, desTarget] = selectedWilayah.split(' - ');
+
+            const targetRows = databaseMaster.filter(item => 
+                item.korwil === selectedKorwil && 
+                item.kecamatan === kecTarget && 
+                item.desa === desTarget
+            );
+            
+            let listMitra = [];
+            targetRows.forEach(row => {
+                let mitraName = peran === 'PPL' ? row.ppl : row.pml;
+                if (mitraName && !listMitra.includes(mitraName)) {
+                    listMitra.push(mitraName);
+                }
+            });
+
+            listMitra.forEach(m => {
+                let opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                mitraSelect.appendChild(opt);
+            });
+        }
+
+        async function submitForm(event) {
+            event.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const statusEl = document.getElementById('statusMessage');
+            
+            btn.disabled = true;
+            btn.textContent = "Mengirim...";
+            statusEl.textContent = "";
+
+            const formData = {
+                korwil: document.getElementById('korwilSelect').value,
+                wilayah: document.getElementById('wilayahSelect').value,
+                peran: document.getElementById('peranMitra').value,
+                namaMitra: document.getElementById('namaMitra').value,
+                aspek1: document.querySelector('input[name="aspek1"]:checked')?.value,
+                aspek2: document.querySelector('input[name="aspek2"]:checked')?.value,
+                aspek3: document.querySelector('input[name="aspek3"]:checked')?.value,
+                aspek4: document.querySelector('input[name="aspek4"]:checked')?.value,
+                catatan: document.getElementById('catatan').value
+            };
+
+            try {
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(formData)
+                });
+                const result = await response.json();
+
+                if (result.result === 'success') {
+                    statusEl.textContent = "Penilaian berhasil dikirim dan tersimpan di sheet hasil_pengisian!";
+                    statusEl.className = "text-center text-xs font-semibold text-emerald-600 mt-2";
+                    document.getElementById('evaluationForm').reset();
+                    document.getElementById('wilayahSelect').innerHTML = '<option value="">-- Pilih Korwil Terlebih Dahulu --</option>';
+                    document.getElementById('namaMitra').innerHTML = '<option value="">-- Pilih Wilayah & Peran Terlebih Dahulu --</option>';
+                } else {
+                    throw new Error("Gagal menyimpan server.");
+                }
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = "Terjadi kesalahan saat mengirim data. Coba lagi.";
+                statusEl.className = "text-center text-xs font-semibold text-red-600 mt-2";
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Kirim Penilaian";
+            }
+        }
+    </script>
